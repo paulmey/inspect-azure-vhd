@@ -153,8 +153,6 @@ func (b *readSeekablePageBlob) Seek(offset int64, whence int) (int64, error) {
 		return 0, fmt.Errorf("Illegal value for parameter whence: %s", whence)
 	}
 
-	//fmt.Printf("[[ blob seek  %d -> ", b.offset)
-
 	switch whence {
 	case 0:
 		if offset != b.offset {
@@ -164,7 +162,7 @@ func (b *readSeekablePageBlob) Seek(offset int64, whence int) (int64, error) {
 			}
 
 			if offset > props.ContentLength {
-				return 0, fmt.Errorf("Cannot seek beyond end of blob")
+				return 0, fmt.Errorf("Cannot seek beyond end of blob (%d > %d)", offset, props.ContentLength)
 			}
 			b.offset = offset
 		}
@@ -176,7 +174,7 @@ func (b *readSeekablePageBlob) Seek(offset int64, whence int) (int64, error) {
 			}
 
 			if b.offset+offset > props.ContentLength {
-				return 0, fmt.Errorf("Cannot seek beyond end of blob")
+				return 0, fmt.Errorf("Cannot seek beyond end of blob (%d > %d)", b.offset+offset, props.ContentLength)
 			}
 			b.offset += offset
 		}
@@ -194,7 +192,6 @@ func (b *readSeekablePageBlob) Seek(offset int64, whence int) (int64, error) {
 		return 0, errNotImplemented
 	}
 
-	//fmt.Printf("%d ]]", b.offset)
 	return b.offset, nil
 }
 

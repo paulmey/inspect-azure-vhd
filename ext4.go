@@ -35,6 +35,23 @@ func NewExtReader(s io.ReadSeeker, p partitionEntry) (r ExtReader, err error) {
 		return
 	}
 
+	unsupported := r.super.FeatureIncompat &
+		^(FeatureIncompatFlagFiletype |
+			FeatureIncompatFlagExtents |
+			FeatureIncompatFlag64Bit |
+			FeatureIncompatFlagFlexBG |
+			FeatureIncompatFlagRecover)
+
+	if unsupported > 0 {
+		err = fmt.Errorf("Unsupported features: %s\n", unsupported)
+		return
+	}
+
+	// fixup for non-64 bit
+	if r.super.FeatureIncompat|FeatureIncompatFlag64Bit == 0 {
+		r.super.BlocksCountHi = 0
+	}
+
 	r.super.Print()
 
 	return
@@ -176,6 +193,20 @@ func (er *ExtReader) GetGroupDescriptor(n uint32) (gd Ext4GroupDescriptor, err e
 		return
 	}
 	err = binary.Read(er.s, binary.LittleEndian, &gd)
+
+	if er.super.FeatureIncompat&FeatureIncompatFlag64Bit == 0 {
+		gd.InodeTableHi = 0
+		gd.BlockBitmapHi = 0
+		gd.InodeBitmapHi = 0
+		gd.ItableUnusedHi = 0
+		gd.ExcludeBitmapHi = 0
+		gd.UsedDirsCountHi = 0
+		gd.BlockBitmapCsumHi = 0
+		gd.FreeBlocksCountHi = 0
+		gd.FreeInodesCountHi = 0
+		gd.InodeBitmapCsumHi = 0
+	}
+
 	return
 }
 
@@ -619,6 +650,9 @@ func (r ExtReader) blockOffset(blockNo int64) int64 {
 
 func (s Ext4SuperBlock) gdSize() uint32 {
 	if s.FeatureIncompat&FeatureIncompatFlag64Bit > 0 {
+		if s.DescSize > 0 {
+			return uint32(s.DescSize)
+		}
 		return 64
 	}
 	return 32
@@ -659,7 +693,11 @@ type Ext4SuperBlock struct {
 	UUID            UUID                 // 128-bit UUID for volume.
 	VolumeName      [16]byte             // Volume label.
 
-	_ [200]byte
+	_ [118]byte
+
+	DescSize uint16 // Size of group descriptors, in bytes, if the 64bit incompat feature flag is set.
+
+	_ [80]byte
 
 	//64bit support valid if EXT4_FEATURE_COMPAT_64BIT
 	BlocksCountHi uint32 // High 32-bits of the block count.
@@ -753,7 +791,7 @@ type FeatureIncompatFlags uint32
 const (
 	FeatureIncompatFlagCompression   FeatureIncompatFlags = 0x1     // Compression (INCOMPAT_COMPRESSION).
 	FeatureIncompatFlagFiletype      FeatureIncompatFlags = 0x2     // Directory entries record the file type. See ext4_dir_entry_2 below (INCOMPAT_FILETYPE).
-	FeatureIncompatFlagRecoder       FeatureIncompatFlags = 0x4     // Filesystem needs recovery (INCOMPAT_RECOVER).
+	FeatureIncompatFlagRecover       FeatureIncompatFlags = 0x4     // Filesystem needs recovery (INCOMPAT_RECOVER).
 	FeatureIncompatFlagJournalDev    FeatureIncompatFlags = 0x8     // Filesystem has a separate journal device (INCOMPAT_JOURNAL_DEV).
 	FeatureIncompatFlagMetaBG        FeatureIncompatFlags = 0x10    // Meta block groups. See the earlier discussion of this feature (INCOMPAT_META_BG).
 	FeatureIncompatFlagExtents       FeatureIncompatFlags = 0x40    // Files in this filesystem use extents (INCOMPAT_EXTENTS).
@@ -776,8 +814,8 @@ func (f FeatureIncompatFlags) String() string {
 	if f&FeatureIncompatFlagFiletype > 0 {
 		flags += "Filetype|"
 	}
-	if f&FeatureIncompatFlagRecoder > 0 {
-		flags += "Recoder|"
+	if f&FeatureIncompatFlagRecover > 0 {
+		flags += "Recover|"
 	}
 	if f&FeatureIncompatFlagJournalDev > 0 {
 		flags += "JournalDev|"
