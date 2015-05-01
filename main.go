@@ -2,20 +2,19 @@ package main
 
 import (
 	"github.com/MSOpenTech/azure-sdk-for-go/storage"
+	"path"
 
 	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+	//"os"
 	//"time"
 )
 
 const (
-	//	uri        = "https://pmwus123.blob.core.windows.net/images/PackerMade_OpenLogicImage_2015-April-25_19-40-os-2015-04-26.vhd?se=2015-06-01T00%3A00%3A00Z&sp=r&sv=2014-02-14&sr=b&sig=96R8sepchondTMF0ihlKkMRda0u1%2FvuSuvfZT6LKDuc%3D"
 	apiVersion = "2014-02-14"
-	pageSize   = 512
 )
 
 var (
@@ -54,40 +53,51 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Printf("Iterating /var/log, downloading interesting files...\n")
-	entries, err := r.ListPath("/var/log")
-	if err != nil {
-		panic(err)
+	globs := []string{
+		"/etc/ssh*/*",
+		"/etc/ssh*",
+		"/etc/fstab",
+		"/etc/mtab",
+		"/etc/waagent.conf",
+		"/var/log/messages",
+		"/var/log/boot.log",
+		"/var/log/dmesg",
+		"/var/log/syslog",
+		"/var/log/waagent/*",
+		"/var/log/waagent*",
+		"/var/log/walinuxagent/*",
+		"/var/log/walinuxagent*",
+		"/var/log/azure/*",
+		"/var/log/*",
 	}
-	for _, de := range entries {
-		fmt.Printf("    %-10s %s", de.FileType, de.Name)
-		if de.Name.String() == "messages" ||
-			de.Name.String() == "boot.log" ||
-			de.Name.String() == "dmesg" ||
-			de.Name.String() == "syslog" {
+	cache := map[string][]Ext4DirEntry2{}
 
-			inode, err := r.GetInode(de.Inode)
-			if err != nil {
-				panic(err)
-			}
-
-			f, err := os.OpenFile(de.Name.String(), os.O_RDWR|os.O_CREATE, 0666)
-			if err != nil {
-				panic(err)
-			}
-			defer f.Close()
-
-			ir, err := r.GetInodeReader(inode)
-			if err != nil {
-				panic(err)
-			}
-
-			n, err := io.Copy(f, ir)
-			f.Close()
-
-			fmt.Printf(" ==> downloaded %d bytes", n)
+	fmt.Printf("Downloading interesting files...\n")
+	for _, glob := range globs {
+		i := len(glob)
+		for ; i > 0 && glob[i-1] != '/'; i-- {
 		}
-		fmt.Println()
+		p := glob[:i]
+		file := glob[i:]
+		fmt.Printf("  looking for %s %s\n", p, file)
+
+		entries, ok := cache[p]
+		if !ok {
+			entries, err = r.ListPath(p)
+			if err == ErrNotFound {
+				cache[p] = []Ext4DirEntry2{}
+			} else if err != nil {
+				panic(err)
+			}
+			cache[p] = entries
+		}
+		for _, de := range entries {
+			if ok, err := path.Match(file, de.Name.String()); err != nil {
+				fmt.Printf("  error trying to match files:", err)
+			} else if ok && (de.FileType == FileTypeFile || de.FileType == FileTypeSymlink) {
+				fmt.Printf("    %s%s (%s)\n", p, de.Name, de.FileType)
+			}
+		}
 	}
 }
 

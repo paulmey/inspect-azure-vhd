@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 	//"io/ioutil"
 )
 
@@ -102,13 +103,28 @@ func (er ExtReader) traversePath(current Ext4Inode, path string) (entries []Ext4
 	dirname := path[:i]
 
 	for _, e := range entries {
-		if e.FileType == FileTypeDir &&
-			e.Name.String() == dirname {
+		if e.Name.String() == dirname {
 			inode, err := er.GetInode(e.Inode)
 			if err != nil {
 				return []Ext4DirEntry2{}, err
 			}
-			return er.traversePath(inode, path[i:])
+			if e.FileType == FileTypeDir {
+				return er.traversePath(inode, path[i:])
+			} else if e.FileType == FileTypeSymlink {
+				if inode.Size() < 60 {
+					l := string(inode.Data[:inode.Size()])
+					//fmt.Printf("=== following symlink %s\n", l)
+					return er.traversePath(current, l)
+				} else {
+					b, err := ioutil.ReadAll(inode.GetDataReader())
+					if err != nil {
+						return []Ext4DirEntry2{}, err
+					}
+					l := string(b)
+					//fmt.Printf("=== following symlink %s\n", l)
+					return er.traversePath(current, l)
+				}
+			}
 		}
 	}
 
