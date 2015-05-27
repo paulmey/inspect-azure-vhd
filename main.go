@@ -4,13 +4,13 @@ import (
 	"github.com/MSOpenTech/azure-sdk-for-go/storage"
 	"path"
 
+	"github.com/paulmey/inspect-azure-vhd/ext4"
+
 	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
-	//"os"
-	//"time"
 )
 
 const (
@@ -40,7 +40,7 @@ func main() {
 	fmt.Printf("Reading partition table...\n")
 	// location of MBR partition table http://en.wikipedia.org/wiki/Master_boot_record#Sector_layout
 	s.Seek(446, 0)
-	var partitions [4]partitionEntry
+	var partitions [4]ext4.PartitionEntry
 	err := binary.Read(s, binary.LittleEndian, &partitions)
 	if err != nil {
 		panic(err)
@@ -48,7 +48,7 @@ func main() {
 
 	fmt.Printf("Inspecting ext4 filesystem on first partition...\n")
 	// assume that partition 0 is linux with ext4
-	r, err := NewExtReader(s, partitions[0])
+	r, err := ext4.NewExtReader(s, partitions[0])
 	if err != nil {
 		panic(err)
 	}
@@ -70,7 +70,7 @@ func main() {
 		"/var/log/azure/*",
 		"/var/log/*",
 	}
-	cache := map[string][]Ext4DirEntry2{}
+	cache := map[string][]ext4.Ext4DirEntry2{}
 
 	fmt.Printf("Downloading interesting files...\n")
 	for _, glob := range globs {
@@ -84,8 +84,8 @@ func main() {
 		entries, ok := cache[p]
 		if !ok {
 			entries, err = r.ListPath(p)
-			if err == ErrNotFound {
-				cache[p] = []Ext4DirEntry2{}
+			if err == ext4.ErrNotFound {
+				cache[p] = []ext4.Ext4DirEntry2{}
 			} else if err != nil {
 				panic(err)
 			}
@@ -94,20 +94,11 @@ func main() {
 		for _, de := range entries {
 			if ok, err := path.Match(file, de.Name.String()); err != nil {
 				fmt.Printf("  error trying to match files:", err)
-			} else if ok && (de.FileType == FileTypeFile || de.FileType == FileTypeSymlink) {
+			} else if ok && (de.FileType == ext4.FileTypeFile || de.FileType == ext4.FileTypeSymlink) {
 				fmt.Printf("    %s%s (%s)\n", p, de.Name, de.FileType)
 			}
 		}
 	}
-}
-
-type partitionEntry struct {
-	Active   byte
-	CHSFirst [3]byte
-	Type     byte
-	CHSLast  [3]byte
-	LBAfirst uint32
-	Sectors  uint32
 }
 
 func SasPageBlobAccessor(url string) io.ReadSeeker {
