@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/MSOpenTech/azure-sdk-for-go/storage"
-	"path"
 
 	"github.com/paulmey/inspect-azure-vhd/ext4"
 
@@ -58,52 +57,39 @@ func main() {
 		panic(err)
 	}
 
-	globs := []string{
-		"/etc/ssh*/*",
-		"/etc/ssh*",
-		"/etc/fstab",
-		"/etc/mtab",
-		"/etc/waagent.conf",
-		"/var/log/messages",
-		"/var/log/boot.log",
-		"/var/log/dmesg",
-		"/var/log/syslog",
-		"/var/log/waagent/*",
-		"/var/log/waagent*",
-		"/var/log/walinuxagent/*",
-		"/var/log/walinuxagent*",
-		"/var/log/azure/*",
-		"/var/log/*",
+	// globs := []string{
+	// 	"/etc/ssh*/*",
+	// 	"/etc/ssh*",
+	// 	"/etc/fstab",
+	// 	"/etc/mtab",
+	// 	"/etc/waagent.conf",
+	// 	"/var/log/messages",
+	// 	"/var/log/boot.log",
+	// 	"/var/log/dmesg",
+	// 	"/var/log/syslog",
+	// 	"/var/log/waagent/*",
+	// 	"/var/log/waagent*",
+	// 	"/var/log/walinuxagent/*",
+	// 	"/var/log/walinuxagent*",
+	// 	"/var/log/azure/*",
+	// 	"/var/log/*",
+	// }
+
+	fs, err := r.Root()
+	if err != nil {
+		panic(err)
 	}
-	cache := map[string][]ext4.DirEntry{}
 
 	fmt.Printf("Downloading interesting files...\n")
-	for _, glob := range globs {
-		i := len(glob)
-		for ; i > 0 && glob[i-1] != '/'; i-- {
-		}
-		p := glob[:i]
-		file := glob[i:]
-		fmt.Printf("  looking for %s %s\n", p, file)
-
-		entries, ok := cache[p]
-		if !ok {
-			entries, err = r.ListPath(p)
-			if err == ext4.ErrNotFound {
-				cache[p] = []ext4.DirEntry{}
-			} else if err != nil {
-				panic(err)
-			}
-			cache[p] = entries
-		}
-		for _, de := range entries {
-			if ok, err := path.Match(file, de.Name.String()); err != nil {
-				fmt.Printf("  error trying to match files:", err)
-			} else if ok && (de.FileType == ext4.FileTypeFile || de.FileType == ext4.FileTypeSymlink) {
-				fmt.Printf("    %s%s (%s)\n", p, de.Name, de.FileType)
-			}
-		}
+	//for _, glob := range globs {
+	files, err := fs.Entries()
+	if err != nil {
+		panic(err)
 	}
+	for _, f := range files {
+		fmt.Printf("   %v \n", f)
+	}
+	//}
 }
 
 type partitionEntry struct {

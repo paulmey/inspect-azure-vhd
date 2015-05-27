@@ -8,6 +8,46 @@ import (
 	"io/ioutil"
 )
 
+func (er Reader) Root() (Directory, error) {
+	inode, err := er.GetInode(2)
+	if err != nil {
+		return Directory{}, err
+	}
+	return Directory{
+		r:     er,
+		inode: inode,
+		path:  "/",
+	}, nil
+}
+
+type Directory struct {
+	r     Reader
+	inode Inode
+	path  string
+}
+
+func (d Directory) Entries() ([]DirEntry, error) {
+	var entries []DirEntry
+	b, err := d.r.GetInodeContent(d.inode)
+	if err != nil {
+		return entries, err
+	}
+
+	entries = make([]DirEntry, 0, d.r.super.blockSize()/12) // min dir_entry2 rec_len seems to be 12
+	r := bytes.NewReader(b)
+	for {
+		de, err := ReadDirectoryEntry(r)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return []DirEntry{}, err
+		}
+		entries = append(entries, de)
+	}
+	return entries, nil
+}
+
 func (er Reader) ListPath(path string) ([]DirEntry, error) {
 	if path == "" || path[0] != '/' {
 		return []DirEntry{}, fmt.Errorf("path must start with '/': %q", path)
