@@ -36,7 +36,7 @@ func (e Extent) Start() int64 {
 	return int64(e.StartHi)<<32 + int64(e.StartLo)
 }
 
-func (er ExtReader) GetExtents(inode Inode) ([]Extent, error) {
+func (er Reader) GetExtents(inode Inode) ([]Extent, error) {
 	if inode.Flags&InodeFlagExtents == 0 {
 		return nil, errNotImplemented
 	}
@@ -45,7 +45,7 @@ func (er ExtReader) GetExtents(inode Inode) ([]Extent, error) {
 	return er.readExtents(inodeData)
 }
 
-func (er ExtReader) readExtents(r io.Reader) ([]Extent, error) {
+func (er Reader) readExtents(r io.Reader) ([]Extent, error) {
 	var eh ExtentHeader
 	err := binary.Read(r, binary.LittleEndian, &eh)
 	if err != nil {

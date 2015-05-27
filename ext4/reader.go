@@ -6,15 +6,11 @@ import (
 	"io"
 )
 
-func NewExtReader(s io.ReadSeeker, p PartitionEntry) (r ExtReader, err error) {
-	r = ExtReader{
+func NewReader(s io.ReadSeeker, startBlock, blockCount uint32) (r Reader, err error) {
+	r = Reader{
 		s:     s,
-		start: int64(p.LBAfirst * 512),
-		size:  int64(p.Sectors * 512),
-	}
-	if p.Type != 0x83 {
-		err = fmt.Errorf("Not a linux partition!")
-		return
+		start: int64(startBlock * 512),
+		size:  int64(blockCount * 512),
 	}
 
 	_, err = s.Seek(r.start+1024, 0)
@@ -53,12 +49,12 @@ func NewExtReader(s io.ReadSeeker, p PartitionEntry) (r ExtReader, err error) {
 	return
 }
 
-func (r ExtReader) blockOffset(blockNo int64) int64 {
+func (r Reader) blockOffset(blockNo int64) int64 {
 	//fmt.Printf("[[ ?? block %d ?? ]]\n", blockNo)
 	return r.start + blockNo*r.super.blockSize()
 }
 
-type ExtReader struct {
+type Reader struct {
 	s     io.ReadSeeker
 	start int64
 	size  int64

@@ -40,15 +40,20 @@ func main() {
 	fmt.Printf("Reading partition table...\n")
 	// location of MBR partition table http://en.wikipedia.org/wiki/Master_boot_record#Sector_layout
 	s.Seek(446, 0)
-	var partitions [4]ext4.PartitionEntry
-	err := binary.Read(s, binary.LittleEndian, &partitions)
+	var p partitionEntry
+	err := binary.Read(s, binary.LittleEndian, &p)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("Inspecting ext4 filesystem on first partition...\n")
 	// assume that partition 0 is linux with ext4
-	r, err := ext4.NewExtReader(s, partitions[0])
+	if p.Type != 0x83 {
+		err = fmt.Errorf("Not a linux partition!")
+		return
+	}
+
+	r, err := ext4.NewReader(s, p.LBAfirst, p.Sectors)
 	if err != nil {
 		panic(err)
 	}
@@ -99,6 +104,15 @@ func main() {
 			}
 		}
 	}
+}
+
+type partitionEntry struct {
+	Active   byte
+	CHSFirst [3]byte
+	Type     byte
+	CHSLast  [3]byte
+	LBAfirst uint32
+	Sectors  uint32
 }
 
 func SasPageBlobAccessor(url string) io.ReadSeeker {

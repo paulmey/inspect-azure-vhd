@@ -12,16 +12,6 @@ var errNotImplemented = fmt.Errorf("Not implemented")
 
 var ErrNotFound = fmt.Errorf("Not Found")
 
-// paulmey fixme: needs to be removed from this package
-type PartitionEntry struct {
-	Active   byte
-	CHSFirst [3]byte
-	Type     byte
-	CHSLast  [3]byte
-	LBAfirst uint32
-	Sectors  uint32
-}
-
 type UUID [16]byte
 
 func (b UUID) String() string {

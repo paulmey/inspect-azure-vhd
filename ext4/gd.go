@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 )
 
-func (er *ExtReader) GetGroupDescriptor(n uint32) (gd GroupDescriptor, err error) {
+func (er *Reader) GetGroupDescriptor(n uint32) (gd GroupDescriptor, err error) {
 	_, err = er.s.Seek(er.blockOffset(1)+int64(n)*int64(er.super.gdSize()), 0)
 	if err != nil {
 		return

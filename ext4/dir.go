@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 )
 
-func (er ExtReader) ListPath(path string) ([]DirEntry, error) {
+func (er Reader) ListPath(path string) ([]DirEntry, error) {
 	if path == "" || path[0] != '/' {
 		return []DirEntry{}, fmt.Errorf("path must start with '/': %q", path)
 	}
@@ -21,7 +21,7 @@ func (er ExtReader) ListPath(path string) ([]DirEntry, error) {
 	return er.traversePath(rootNode, path)
 }
 
-func (er ExtReader) traversePath(current Inode, path string) (entries []DirEntry, err error) {
+func (er Reader) traversePath(current Inode, path string) (entries []DirEntry, err error) {
 	b, err := er.GetInodeContent(current)
 	if err != nil {
 		return

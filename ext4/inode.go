@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-func (er *ExtReader) GetInode(n uint32) (inode Inode, err error) {
+func (er *Reader) GetInode(n uint32) (inode Inode, err error) {
 	if n < 1 {
 		err = fmt.Errorf("inode number (n) should be 1-based and positive")
 	}
@@ -26,7 +26,7 @@ func (er *ExtReader) GetInode(n uint32) (inode Inode, err error) {
 	return
 }
 
-func (er *ExtReader) GetInodeReader(inode Inode) (io.Reader, error) {
+func (er *Reader) GetInodeReader(inode Inode) (io.Reader, error) {
 	indr := inodeDataReader{
 		er:     er,
 		length: int64(inode.Size()),
@@ -39,7 +39,7 @@ func (er *ExtReader) GetInodeReader(inode Inode) (io.Reader, error) {
 	return &indr, nil
 }
 
-func (er *ExtReader) GetInodeContent(inode Inode) ([]byte, error) {
+func (er *Reader) GetInodeContent(inode Inode) ([]byte, error) {
 	r, err := er.GetInodeReader(inode)
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func (er *ExtReader) GetInodeContent(inode Inode) ([]byte, error) {
 }
 
 type inodeDataReader struct {
-	er      *ExtReader
+	er      *Reader
 	extents []Extent
 	offset  int64
 	length  int64
