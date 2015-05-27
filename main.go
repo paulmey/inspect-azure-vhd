@@ -70,7 +70,7 @@ func main() {
 		"/var/log/azure/*",
 		"/var/log/*",
 	}
-	cache := map[string][]ext4.Ext4DirEntry2{}
+	cache := map[string][]ext4.DirEntry{}
 
 	fmt.Printf("Downloading interesting files...\n")
 	for _, glob := range globs {
@@ -85,7 +85,7 @@ func main() {
 		if !ok {
 			entries, err = r.ListPath(p)
 			if err == ext4.ErrNotFound {
-				cache[p] = []ext4.Ext4DirEntry2{}
+				cache[p] = []ext4.DirEntry{}
 			} else if err != nil {
 				panic(err)
 			}

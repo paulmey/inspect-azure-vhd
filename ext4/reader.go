@@ -62,5 +62,5 @@ type ExtReader struct {
 	s     io.ReadSeeker
 	start int64
 	size  int64
-	super Ext4SuperBlock
+	super SuperBlock
 }

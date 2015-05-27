@@ -8,34 +8,34 @@ import (
 	"io/ioutil"
 )
 
-func (er ExtReader) ListPath(path string) ([]Ext4DirEntry2, error) {
+func (er ExtReader) ListPath(path string) ([]DirEntry, error) {
 	if path == "" || path[0] != '/' {
-		return []Ext4DirEntry2{}, fmt.Errorf("path must start with '/': %q", path)
+		return []DirEntry{}, fmt.Errorf("path must start with '/': %q", path)
 	}
 
 	rootNode, err := er.GetInode(2)
 	if err != nil {
-		return []Ext4DirEntry2{}, err
+		return []DirEntry{}, err
 	}
 
 	return er.traversePath(rootNode, path)
 }
 
-func (er ExtReader) traversePath(current Ext4Inode, path string) (entries []Ext4DirEntry2, err error) {
+func (er ExtReader) traversePath(current Inode, path string) (entries []DirEntry, err error) {
 	b, err := er.GetInodeContent(current)
 	if err != nil {
 		return
 	}
 
-	entries = make([]Ext4DirEntry2, 0, er.super.blockSize()/12) // min dir_entry2 rec_len seems to be 12
+	entries = make([]DirEntry, 0, er.super.blockSize()/12) // min dir_entry2 rec_len seems to be 12
 	r := bytes.NewReader(b)
 	for {
-		de, err := ReadDirectoryEntry2(r)
+		de, err := ReadDirectoryEntry(r)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return []Ext4DirEntry2{}, err
+			return []DirEntry{}, err
 		}
 		entries = append(entries, de)
 	}
@@ -56,7 +56,7 @@ func (er ExtReader) traversePath(current Ext4Inode, path string) (entries []Ext4
 		if e.Name.String() == dirname {
 			inode, err := er.GetInode(e.Inode)
 			if err != nil {
-				return []Ext4DirEntry2{}, err
+				return []DirEntry{}, err
 			}
 			if e.FileType == FileTypeDir {
 				return er.traversePath(inode, path[i:])
@@ -68,7 +68,7 @@ func (er ExtReader) traversePath(current Ext4Inode, path string) (entries []Ext4
 				} else {
 					b, err := ioutil.ReadAll(inode.GetDataReader())
 					if err != nil {
-						return []Ext4DirEntry2{}, err
+						return []DirEntry{}, err
 					}
 					l := string(b)
 					//fmt.Printf("=== following symlink %s\n", l)
@@ -78,11 +78,11 @@ func (er ExtReader) traversePath(current Ext4Inode, path string) (entries []Ext4
 		}
 	}
 
-	return []Ext4DirEntry2{}, ErrNotFound
+	return []DirEntry{}, ErrNotFound
 }
 
-func ReadDirectoryEntry2(r io.Reader) (entry Ext4DirEntry2, err error) {
-	err = binary.Read(r, binary.LittleEndian, &entry.Ext4DirEntry2Header)
+func ReadDirectoryEntry(r io.Reader) (entry DirEntry, err error) {
+	err = binary.Read(r, binary.LittleEndian, &entry.DirEntryHeader)
 	if err != nil {
 		return
 	}
@@ -96,8 +96,8 @@ func ReadDirectoryEntry2(r io.Reader) (entry Ext4DirEntry2, err error) {
 	return
 }
 
-type Ext4DirEntry2 struct {
-	Ext4DirEntry2Header
+type DirEntry struct {
+	DirEntryHeader
 	Name charArray // File name.
 }
 
@@ -107,7 +107,7 @@ func (c charArray) String() string {
 	return string([]byte(c))
 }
 
-type Ext4DirEntry2Header struct {
+type DirEntryHeader struct {
 	Inode   uint32 // Number of the inode that this directory entry points to.
 	RecLen  uint16 // Length of this directory entry.
 	NameLen byte   // Length of the file name.

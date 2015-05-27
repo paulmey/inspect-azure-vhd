@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-func (er *ExtReader) GetInode(n uint32) (inode Ext4Inode, err error) {
+func (er *ExtReader) GetInode(n uint32) (inode Inode, err error) {
 	if n < 1 {
 		err = fmt.Errorf("inode number (n) should be 1-based and positive")
 	}
@@ -26,7 +26,7 @@ func (er *ExtReader) GetInode(n uint32) (inode Ext4Inode, err error) {
 	return
 }
 
-func (er *ExtReader) GetInodeReader(inode Ext4Inode) (io.Reader, error) {
+func (er *ExtReader) GetInodeReader(inode Inode) (io.Reader, error) {
 	indr := inodeDataReader{
 		er:     er,
 		length: int64(inode.Size()),
@@ -39,7 +39,7 @@ func (er *ExtReader) GetInodeReader(inode Ext4Inode) (io.Reader, error) {
 	return &indr, nil
 }
 
-func (er *ExtReader) GetInodeContent(inode Ext4Inode) ([]byte, error) {
+func (er *ExtReader) GetInodeContent(inode Inode) ([]byte, error) {
 	r, err := er.GetInodeReader(inode)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (er *ExtReader) GetInodeContent(inode Ext4Inode) ([]byte, error) {
 
 type inodeDataReader struct {
 	er      *ExtReader
-	extents []Ext4Extent
+	extents []Extent
 	offset  int64
 	length  int64
 }
@@ -157,7 +157,7 @@ func (iodr *inodeDataReader) WriteTo(w io.Writer) (n int64, err error) {
 	return n, nil
 }
 
-type Ext4Inode struct {
+type Inode struct {
 	// File mode. Any of:
 	//0x1	S_IXOTH (Others may execute)
 	//0x2	S_IWOTH (Others may write)
@@ -309,10 +309,10 @@ func (f InodeFlags) String() string {
 	return fmt.Sprintf("%s(0x%08x)", flags, uint32(f))
 }
 
-func (inode Ext4Inode) Size() uint64 {
+func (inode Inode) Size() uint64 {
 	return uint64(inode.SizeLo) + uint64(inode.SizeHigh)<<32
 }
 
-func (inode Ext4Inode) GetDataReader() io.Reader {
+func (inode Inode) GetDataReader() io.Reader {
 	return bytes.NewReader(inode.Data[:])
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-func (s Ext4SuperBlock) gdSize() uint32 {
+func (s SuperBlock) gdSize() uint32 {
 	if s.FeatureIncompat&FeatureIncompatFlag64Bit > 0 {
 		if s.DescSize > 0 {
 			return uint32(s.DescSize)
@@ -14,11 +14,11 @@ func (s Ext4SuperBlock) gdSize() uint32 {
 	return 32
 }
 
-func (s Ext4SuperBlock) blockSize() int64 {
+func (s SuperBlock) blockSize() int64 {
 	return 1 << (10 + s.LogBlockSize)
 }
 
-type Ext4SuperBlock struct {
+type SuperBlock struct {
 	InodesCount   uint32 // Total inode count.
 	BlocksCountLo uint32 // Total block count.
 
@@ -32,8 +32,8 @@ type Ext4SuperBlock struct {
 
 	_ [12]byte
 
-	Magic uint16           // Magic signature, 0xEF53
-	State Ext4FSStateFlags // File system state. Valid values are
+	Magic uint16       // Magic signature, 0xEF53
+	State FSStateFlags // File system state. Valid values are
 
 	_ [16]byte
 
@@ -252,15 +252,15 @@ func (f FeatureROCompatFlags) String() string {
 	return fmt.Sprintf("%s(0x%08x)", flags, uint32(f))
 }
 
-type Ext4FSStateFlags uint16
+type FSStateFlags uint16
 
 const (
-	Ext4FSStateFlagClean   Ext4FSStateFlags = 1 << iota // Cleanly umounted
-	Ext4FSStateFlagError                                // Errors detected
-	Ext4FSStateFlagOrphans                              // Orphans being recovered
+	FSStateFlagClean   FSStateFlags = 1 << iota // Cleanly umounted
+	FSStateFlagError                            // Errors detected
+	FSStateFlagOrphans                          // Orphans being recovered
 )
 
-func (s Ext4SuperBlock) String() string {
+func (s SuperBlock) String() string {
 	//fmt.Printf("RAW:             %+v\n", s)
 
 	rv := fmt.Sprintf("Inode count:     %v\n", s.InodesCount)

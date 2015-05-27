@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 )
 
-func (er *ExtReader) GetGroupDescriptor(n uint32) (gd Ext4GroupDescriptor, err error) {
+func (er *ExtReader) GetGroupDescriptor(n uint32) (gd GroupDescriptor, err error) {
 	_, err = er.s.Seek(er.blockOffset(1)+int64(n)*int64(er.super.gdSize()), 0)
 	if err != nil {
 		return
@@ -27,7 +27,7 @@ func (er *ExtReader) GetGroupDescriptor(n uint32) (gd Ext4GroupDescriptor, err e
 	return
 }
 
-type Ext4GroupDescriptor struct {
+type GroupDescriptor struct {
 	BlockBitmapLo     uint32 // Lower 32-bits of location of block bitmap.
 	InodeBitmapLo     uint32 // Lower 32-bits of location of inode bitmap.
 	InodeTableLo      uint32 // Lower 32-bits of location of inode table.
@@ -58,6 +58,6 @@ type Ext4GroupDescriptor struct {
 	_                 [4]byte
 }
 
-func (gd Ext4GroupDescriptor) InodeTableBlock() int64 {
+func (gd GroupDescriptor) InodeTableBlock() int64 {
 	return int64(gd.InodeTableLo) + int64(gd.InodeTableHi)<<32
 }
