@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"regexp"
+	"strings"
 )
 
 func (er Reader) Root() (Directory, error) {
@@ -36,7 +38,7 @@ func (d Directory) Entries() ([]DirEntry, error) {
 	entries = make([]DirEntry, 0, d.r.super.blockSize()/12) // min dir_entry2 rec_len seems to be 12
 	r := bytes.NewReader(b)
 	for {
-		de, err := ReadDirectoryEntry(r)
+		de, err := readDirEntry(r)
 		if err == io.EOF {
 			break
 		}
@@ -48,80 +50,65 @@ func (d Directory) Entries() ([]DirEntry, error) {
 	return entries, nil
 }
 
-func (er Reader) ListPath(path string) ([]DirEntry, error) {
-	if path == "" || path[0] != '/' {
-		return []DirEntry{}, fmt.Errorf("path must start with '/': %q", path)
-	}
-
-	rootNode, err := er.GetInode(2)
+func (d Directory) findEntry(name string) (entry DirEntry, err error) {
+	entries, err := d.Entries()
 	if err != nil {
-		return []DirEntry{}, err
+		return DirEntry{}, err
 	}
-
-	return er.traversePath(rootNode, path)
-}
-
-func (er Reader) traversePath(current Inode, path string) (entries []DirEntry, err error) {
-	b, err := er.GetInodeContent(current)
-	if err != nil {
-		return
-	}
-
-	entries = make([]DirEntry, 0, er.super.blockSize()/12) // min dir_entry2 rec_len seems to be 12
-	r := bytes.NewReader(b)
-	for {
-		de, err := ReadDirectoryEntry(r)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return []DirEntry{}, err
-		}
-		entries = append(entries, de)
-	}
-
-	for path != "" && path[0] == '/' {
-		path = path[1:]
-	}
-	if path == "" {
-		return
-	}
-
-	i := 0
-	for ; i < len(path) && path[i] != '/'; i++ {
-	}
-	dirname := path[:i]
-
 	for _, e := range entries {
-		if e.Name.String() == dirname {
-			inode, err := er.GetInode(e.Inode)
-			if err != nil {
-				return []DirEntry{}, err
-			}
-			if e.FileType == FileTypeDir {
-				return er.traversePath(inode, path[i:])
-			} else if e.FileType == FileTypeSymlink {
-				if inode.Size() < 60 {
-					l := string(inode.Data[:inode.Size()])
-					//fmt.Printf("=== following symlink %s\n", l)
-					return er.traversePath(current, l)
-				} else {
-					b, err := ioutil.ReadAll(inode.GetDataReader())
-					if err != nil {
-						return []DirEntry{}, err
-					}
-					l := string(b)
-					//fmt.Printf("=== following symlink %s\n", l)
-					return er.traversePath(current, l)
-				}
-			}
+		if string(e.Name) == name {
+			return e, nil
 		}
 	}
-
-	return []DirEntry{}, ErrNotFound
+	return DirEntry{}, ErrNotFound
 }
 
-func ReadDirectoryEntry(r io.Reader) (entry DirEntry, err error) {
+var slashes = regexp.MustCompile("/+")
+
+func (d Directory) ChangeDir(path string) (Directory, error) {
+	path = slashes.ReplaceAllLiteralString(path, "/")
+	s := strings.Split(path, "/")
+	for len(s) > 0 && s[0] == "" {
+		s = s[1:]
+	}
+	if len(s) == 0 {
+		return Directory{}, fmt.Errorf("invalid path")
+	}
+	e, err := d.findEntry(s[0])
+	if err != nil {
+		return Directory{}, err
+	}
+	if e.FileType == FileTypeDir {
+		inode, err := d.r.GetInode(e.Inode)
+		if err != nil {
+			return Directory{}, err
+		}
+		dir := Directory{
+			r:     d.r,
+			inode: inode,
+			path:  d.path + s[0] + "/",
+		}
+		if len(s) == 1 {
+			return dir, nil
+		}
+		return dir.ChangeDir(strings.Join(s[1:], "/"))
+	}
+	if e.FileType == FileTypeSymlink {
+		inode, err := d.r.GetInode(e.Inode)
+		if err != nil {
+			return Directory{}, err
+		}
+		link, err := ioutil.ReadAll(inode.GetDataReader())
+		if err != nil {
+			return Directory{}, err
+		}
+		path = string(link) + "/" + strings.Join(s[1:], "/")
+		return d.ChangeDir(path)
+	}
+	return Directory{}, fmt.Errorf("Not a directory or symlink: ", d.path+s[0])
+}
+
+func readDirEntry(r io.Reader) (entry DirEntry, err error) {
 	err = binary.Read(r, binary.LittleEndian, &entry.DirEntryHeader)
 	if err != nil {
 		return
