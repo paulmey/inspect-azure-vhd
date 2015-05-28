@@ -34,33 +34,26 @@ State:           1
 FeatureCompat:   HasJournal|ExtAttr|ResizeInodes|DirIndex(0x0000003c)
 FeatureIncompat: Filetype|Extents|64Bit|FlexBG(0x000002c2)
 FeatureROCompat: SparseSuper|LargeFile|HugeFile|GDTCsum|DirNlink|ExtraIsize(0x0000007b)
-Iterating /var/log, downloading interesting files...
-    Dir        .
-    Dir        ..
-    File       tallylog
-    File       lastlog
-    File       wtmp
-    File       btmp
-    Dir        ppp
-    File       messages ==> downloaded 1153990 bytes
-    File       secure
-    File       maillog
-    File       spooler
-    Dir        audit
-    Dir        tuned
-    Dir        anaconda
-    File       boot.log ==> downloaded 5909 bytes
-    File       dmesg ==> downloaded 42041 bytes
-    File       cron
-    File       dmesg.old
-    File       yum.log
-    File       grubby
-    File       cron-20140727
-    File       maillog-20140727
-    File       messages-20140727
-    File       secure-20140727
-    File       spooler-20140727
-    Dir        azure
+Downloading interesting files...
+   /etc/ssh/sshd_config (File) 
+     \-> downloading 4443 bytes
+   /etc/ssh/moduli (File) 
+     \-> downloading 242153 bytes
+   /etc/ssh/ssh_config (File) 
+     \-> downloading 2208 bytes
+   /etc/ssh/sshd_config.rpmnew (File) 
+     \-> downloading 4361 bytes
+   /etc/fstab (File) 
+     \-> downloading 313 bytes
+WARN: failed to resolve symlink /etc/mtab: DirEntry not found: /proc/self/mounts
+   /etc/waagent.conf (File) 
+     \-> downloading 1505 bytes
+   /var/log/messages (File) 
+     \-> downloading 1161694 bytes
+   /var/log/boot.log (File) 
+     \-> downloading 5909 bytes
+   /var/log/dmesg (File) 
+     \-> downloading 41794 bytes
 ```
 
 ## Creating a SAS (shared access signature) uri for your VHD
