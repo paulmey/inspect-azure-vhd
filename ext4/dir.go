@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -45,12 +46,13 @@ func (d Directory) Entries() ([]DirEntry, error) {
 		if err != nil {
 			return []DirEntry{}, err
 		}
+		de.d = &d
 		entries = append(entries, de)
 	}
 	return entries, nil
 }
 
-func (d Directory) findEntry(name string) (entry DirEntry, err error) {
+func (d Directory) findEntry(name string) (DirEntry, error) {
 	entries, err := d.Entries()
 	if err != nil {
 		return DirEntry{}, err
@@ -63,20 +65,58 @@ func (d Directory) findEntry(name string) (entry DirEntry, err error) {
 	return DirEntry{}, ErrNotFound
 }
 
+func (d Directory) findEntries(glob string) ([]DirEntry, error) {
+	entries, err := d.Entries()
+	if err != nil {
+		return []DirEntry{}, err
+	}
+	matches := []DirEntry{}
+	for _, e := range entries {
+		if matched, err := path.Match(glob, e.Name.String()); err != nil {
+			return []DirEntry{}, err
+		} else if matched {
+			if e.Name.String() == "." && glob != "." {
+				continue
+			}
+			if e.Name.String() == ".." && glob != ".." {
+				continue
+			}
+			matches = append(matches, e)
+		}
+	}
+	return matches, nil
+}
+
 var slashes = regexp.MustCompile("/+")
 
-func (d Directory) ChangeDir(path string) (Directory, error) {
+func normalizePath(path string) string {
 	path = slashes.ReplaceAllLiteralString(path, "/")
+	return path
+}
+
+func splitPath(path string) []string {
+	path = normalizePath(path)
 	s := strings.Split(path, "/")
 	for len(s) > 0 && s[0] == "" {
 		s = s[1:]
 	}
+	return s
+}
+
+func (d Directory) ChangeDir(path string) (Directory, error) {
+	s := splitPath(path)
 	if len(s) == 0 {
 		return Directory{}, fmt.Errorf("invalid path")
 	}
 	e, err := d.findEntry(s[0])
 	if err != nil {
 		return Directory{}, err
+	}
+	for e.FileType == FileTypeSymlink {
+		e, err = e.ResolveSymlink()
+		if err != nil {
+			return Directory{}, err
+		}
 	}
 	if e.FileType == FileTypeDir {
 		inode, err := d.r.GetInode(e.Inode)
@@ -93,19 +133,37 @@ func (d Directory) ChangeDir(path string) (Directory, error) {
 		}
 		return dir.ChangeDir(strings.Join(s[1:], "/"))
 	}
-	if e.FileType == FileTypeSymlink {
-		inode, err := d.r.GetInode(e.Inode)
-		if err != nil {
-			return Directory{}, err
-		}
-		link, err := ioutil.ReadAll(inode.GetDataReader())
-		if err != nil {
-			return Directory{}, err
-		}
-		path = string(link) + "/" + strings.Join(s[1:], "/")
-		return d.ChangeDir(path)
-	}
 	return Directory{}, fmt.Errorf("Not a directory or symlink: ", d.path+s[0])
+}
+
+func (d Directory) Match(glob string) ([]DirEntry, error) {
+	s := splitPath(glob)
+	if len(s) == 0 {
+		return []DirEntry{}, nil
+	}
+
+	matches, err := d.findEntries(s[0])
+	if err != nil {
+		return []DirEntry{}, err
+	}
+	if len(s) == 1 {
+		return matches, nil
+	}
+	entries := []DirEntry{}
+	for _, m := range matches {
+		if m.FileType == FileTypeDir {
+			c, err := d.ChangeDir(m.Name.String())
+			if err != nil {
+				return []DirEntry{}, err
+			}
+			children, err := c.Match(strings.Join(s[1:], "/"))
+			if err != nil {
+				return []DirEntry{}, err
+			}
+			entries = append(entries, children...)
+		}
+	}
+	return entries, nil
 }
 
 func readDirEntry(r io.Reader) (entry DirEntry, err error) {
@@ -123,9 +181,42 @@ func readDirEntry(r io.Reader) (entry DirEntry, err error) {
 	return
 }
 
+func (e DirEntry) ReadSymlink() (string, error) {
+	if e.FileType != FileTypeSymlink {
+		return "", fmt.Errorf("Not a symlink")
+	}
+	inode, err := e.d.r.GetInode(e.Inode)
+	if err != nil {
+		return "", err
+	}
+	link, err := ioutil.ReadAll(inode.GetDataReader())
+	return string(link), err
+}
+
+func (e DirEntry) ResolveSymlink() (DirEntry, error) {
+	link, err := e.ReadSymlink()
+	if err != nil {
+		return DirEntry{}, err
+	}
+
+	m, err := e.d.Match(string(link))
+	if err != nil {
+		return DirEntry{}, err
+	}
+	if len(m) == 0 {
+		return DirEntry{}, fmt.Errorf("DirEntry not found: %s", string(link))
+	}
+	return m[0], nil
+}
+
 type DirEntry struct {
 	DirEntryHeader
 	Name charArray // File name.
+	d    *Directory
+}
+
+func (e DirEntry) Fullname() string {
+	return e.d.path + e.Name.String()
 }
 
 type charArray []byte
