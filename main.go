@@ -2,6 +2,9 @@ package main
 
 import (
 	"github.com/MSOpenTech/azure-sdk-for-go/storage"
+	"io/ioutil"
+	"os"
+	"path"
 
 	"github.com/paulmey/inspect-azure-vhd/ext4"
 
@@ -17,17 +20,19 @@ const (
 )
 
 var (
-	help bool
+	help      bool
+	ouputPath string
 )
 
 func init() {
-	flag.BoolVar(&help, "help", false, "Prints this help")
+	flag.BoolVar(&help, "help", false, "Prints this help.")
+	flag.StringVar(&ouputPath, "outputPath", "out", "Specifies the path where logs and files are placed.")
 }
 
 func main() {
 	flag.Parse()
 	if flag.NArg() != 1 || help {
-		fmt.Printf("Usage: ./inspect-remote-vhd <vhd-read-uri>")
+		fmt.Printf("Usage: ./inspect-remote-vhd <vhd-read-uri>\n")
 		flag.PrintDefaults()
 		return
 	}
@@ -57,23 +62,24 @@ func main() {
 		panic(err)
 	}
 
-	// globs := []string{
-	// 	"/etc/ssh*/*",
-	// 	"/etc/ssh*",
-	// 	"/etc/fstab",
-	// 	"/etc/mtab",
-	// 	"/etc/waagent.conf",
-	// 	"/var/log/messages",
-	// 	"/var/log/boot.log",
-	// 	"/var/log/dmesg",
-	// 	"/var/log/syslog",
-	// 	"/var/log/waagent/*",
-	// 	"/var/log/waagent*",
-	// 	"/var/log/walinuxagent/*",
-	// 	"/var/log/walinuxagent*",
-	// 	"/var/log/azure/*",
-	// 	"/var/log/*",
-	// }
+	globs := []string{
+		"/etc/ssh*/*",
+		"/etc/ssh*",
+		"/etc/fstab",
+		"/etc/mtab",
+		"/etc/waagent.conf",
+		"/var/log/messages",
+		"/var/log/boot.log",
+		"/var/log/dmesg",
+		"/var/log/syslog",
+		"/var/log/waagent/*",
+		"/var/log/waagent*",
+		"/var/log/walinuxagent/*",
+		"/var/log/walinuxagent*",
+		"/var/log/azure/*",
+		"/var/log/azure/*/*",
+		"/var/log/*",
+	}
 
 	fs, err := r.Root()
 	if err != nil {
@@ -81,15 +87,50 @@ func main() {
 	}
 
 	fmt.Printf("Downloading interesting files...\n")
-	//for _, glob := range globs {
-	files, err := fs.Entries()
-	if err != nil {
-		panic(err)
+	for _, glob := range globs {
+		files, err := fs.Match(glob)
+		if err != nil {
+			panic(err)
+		}
+		for _, f := range files {
+			orig := f
+			for f.FileType == ext4.FileTypeSymlink {
+				f, err = f.ResolveSymlink()
+				if err != nil {
+					fmt.Printf("WARN: failed to resolve symlink %s: %v\n", orig.Fullname(), err)
+					continue
+				}
+			}
+			if f.FileType != ext4.FileTypeFile {
+				continue
+			}
+			inode, err := r.GetInode(f.Inode)
+			if err != nil {
+				fmt.Printf("WARN: could not read inode %d (%s -> %s): %v\n", f.Inode, orig.Fullname(), f.Fullname(), err)
+				continue
+			}
+
+			fmt.Printf("   %s (%s) \n", orig.Fullname(), orig.FileType)
+			fmt.Printf("     \\-> downloading %d bytes\n", inode.Size())
+
+			data, err := r.GetInodeContent(inode)
+			if err != nil {
+				fmt.Printf("WARN: could not read data for %s: %s", orig.Fullname(), err)
+				continue
+			}
+
+			outFile := ouputPath + "/" + orig.Fullname()
+			if err := os.MkdirAll(path.Dir(outFile), 0777); err != nil {
+				fmt.Printf("ERR: could not create path %s: %s", path.Dir(outFile), err)
+				return
+			}
+			err = ioutil.WriteFile(outFile, data, 0666)
+			if err != nil {
+				fmt.Printf("ERR: could not write file %s: %s", path.Dir(outFile), err)
+				return
+			}
+		}
 	}
-	for _, f := range files {
-		fmt.Printf("   %v \n", f)
-	}
-	//}
 }
 
 type partitionEntry struct {
