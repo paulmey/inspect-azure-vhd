@@ -15,5 +15,5 @@ after_success: |
     gox -arch="amd64" -os="windows linux darwin" -output "dist/{{.OS}}_{{.Arch}}/{{.Dir}}"
     mkdir -p zip
     for i in `ls dist`; do zip -j zip/$i.zip dist/$i/*; done
-    ghr --username paulmey --token $GITHUB_TOKEN --delete pre-release zip/
+    ghr --username paulmey --token $GITHUB_TOKEN --replace pre-release zip/
   fi
