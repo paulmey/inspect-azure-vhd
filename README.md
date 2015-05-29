@@ -1,11 +1,10 @@
 # inspect-azure-vhd [![Build Status](https://travis-ci.org/paulmey/inspect-azure-vhd.svg?branch=master)](https://travis-ci.org/paulmey/inspect-azure-vhd)
 
 This repo currently contains sample code that allows you to download individual
-files from an EXT2/3/4 Linux VHD in Azure. The code is still pretty rough (read: a big hack)
-and very much apartial implementation where it comes to reading EXT4. I've only tested
-this with one CentOS image, so YMMV. PR's welcome and please do create issues for things 
-you'll want to see. I'll start with some clean up and moving the EXT4 and blob stuff to 
-their own packages.
+files from an EXT2/3/4 Linux VHD in Azure. The code is still pretty rough and very much
+a partial implementation where it comes to reading EXT4. I've only tested this with a
+couple of CentOS images, so YMMV. PR's welcome and please do create issues for things 
+you'll want to see.
 
 ## Usage
 
