@@ -1,4 +1,4 @@
-# inspect-azure-vhd
+# inspect-azure-vhd [![Build Status](https://travis-ci.org/paulmey/inspect-azure-vhd.svg?branch=master)](https://travis-ci.org/paulmey/inspect-azure-vhd)
 
 This repo currently contains sample code that allows you to download individual
 files from an EXT2/3/4 Linux VHD in Azure. The code is still pretty rough (read: a big hack)

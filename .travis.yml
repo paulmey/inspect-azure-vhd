@@ -1,0 +1,19 @@
+sudo: false
+
+language: go
+go:
+  - 1.4
+env:
+  - "PATH=/home/travis/gopath/bin:$PATH"
+script:
+  - go test -v ./...
+after_success: |
+  if [ $TRAVIS_BRANCH == 'master' ]; then
+    go get github.com/mitchellh/gox
+    go get github.com/tcnksm/ghr
+    gox -os="windows linux darwin" -arch="amd64" -build-toolchain
+    gox -arch="amd64" -os="windows linux darwin" -output "dist/{{.OS}}_{{.Arch}}/{{.Dir}}"
+    mkdir -p zip
+    for i in `ls dist`; do zip -j zip/$i.zip dist/$i/*; done
+    ghr --username paulmey --token $GITHUB_TOKEN --delete pre-release zip/
+  fi
