@@ -8,9 +8,8 @@ you'll want to see.
 
 ## Usage
 
-Assuming you have go 1.4 installed and have your $GOBIN in your path:
+You can either [download the binary](https://github.com/paulmey/inspect-azure-vhd/releases) or compile from source (see below). Assuming that the binary is in your path, you can do:
 ```
-go install github.com/paulmey/inspect-azure-vhd
 inspect-azure-vhd "https://youraccount.blob.core.windows.net/container/path/to/blob.vhd?<shared access signature>"
 ```
 The tool wants a url that is can read without knowing your storage keys, so you'll need to create a
@@ -57,7 +56,13 @@ WARN: failed to resolve symlink /etc/mtab: DirEntry not found: /proc/self/mounts
 
 ## Creating a SAS (shared access signature) uri for your VHD
 
-One way you can do this is using the [Azure xplat cli](http://github.com/Azure/azure-xplat-cli):
+A Shared Access Signature (SAS) token is just a bunch of uri parameters like `se=2015-04-28T13%3A00%3A00Z&sp=r&sv=2014-02-14&sr=b&sig=40bLaEqFin6mYgskDyEv5Su61aZ%2FjgGynp3lVTkwQ7w%3D`. You can concatenate that to your blob uri, just make sure there is a `?` in between the URI and the token. 
+Note that the token contains ampersands and percent signs, so you need to surround your url with qoutes when you pass it on a command line.
+You can use PowerShell or the Azure cross platform command-line interface (xplat CLI) to create a SAS token.
+
+### Using Azure CLI
+One way you can do this is using the [Azure cross platfrom CLI](http://github.com/Azure/azure-xplat-cli). The CLI is installed as a node module, so to install it you need to do something like `sudo apt-get install npm && sudo npm install -g azure-cli` (for Ubuntu, similar for other distro's).
+Once this is installed, you can use the snippet below to create a SAS token for the URI to your VHD blob.
 ```sh
 # make sure you have fresh credentials and are in 'Service Management' mode
 azure login
@@ -68,9 +73,21 @@ azure account set <subscription id or name>
 # then get a key for your storage, either primary or secondary is fine
 azure storage account keys list <storage account name>
 # finally, create the signature. The expiry date/time at the end is in UTC
-azure storage blob sas create -a <storage account name> -k <key> <container> <blob path> r 2015-06-01T13:00:00
+azure storage blob sas create -a <storage account name> -k <key> <containername> <blob path within container> r 2015-09-01T13:00:00
 ```
 
-The signature is just a bunch of uri parameters `se=2015-04-28T13%3A00%3A00Z&sp=r&sv=2014-02-14&sr=b&sig=40bLaEqFin6mYgskDyEv5Su61aZ%2FjgGynp3lVTkwQ7w%3D`
-and you can just glue that to your blob uri with a `?` in between. 
-Note that you need to surround your url with qoutes when you pass it in a shell, since it contains ampersands (`&`).
+### Using PowerShell
+If you have [Azure Powershell installed](https://azure.microsoft.com/en-us/documentation/articles/powershell-install-configure/), you can use that to create a SAS token. Assuming you have already logged in and connected to the right subscription (see link in previous sentence), these are the steps to create a SAS token:
+```PowerShell
+$keys = Get-AzureStorageKey $storage_account_name
+$ctx = New-AzureStorageContext $storage_account_name $keys.Primary
+$sastoken = New-AzureStorageBlobSASToken -Context $ctx -Container $container -Blob $blob_path_within_container -Permission r -ExpiryTime 2015-09-01T13:00:00
+```
+Note that the expiry date/time at the end is in UTC.
+
+## Building from source
+
+Assuming you have [go 1.4 toolset installed](http://golang.org/doc/install#install) and have your $GOBIN in your path:
+```
+go get github.com/paulmey/inspect-azure-vhd
+```
