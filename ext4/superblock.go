@@ -260,20 +260,26 @@ const (
 	FSStateFlagOrphans                          // Orphans being recovered
 )
 
+func (s SuperBlock) BlocksCount() uint64 {
+	return uint64(s.BlocksCountLo) + uint64(s.BlocksCountHi)<<32
+}
+
 func (s SuperBlock) String() string {
-	//fmt.Printf("RAW:             %+v\n", s)
+	rv := fmt.Sprintf("Volume name:     %v\n", string(s.VolumeName[:]))
 
-	rv := fmt.Sprintf("Inode count:     %v\n", s.InodesCount)
-	rv += fmt.Sprintf("Block count:     %v\n", uint64(s.BlocksCountLo)+uint64(s.BlocksCountLo)<<32)
+	rv += fmt.Sprintf("Inode count:     %v\n", s.InodesCount)
+	rv += fmt.Sprintf("Block count:     %v\n", s.BlocksCount())
 
-	rv += fmt.Sprintf("Block size:      %v\n", s.blockSize())
-	rv += fmt.Sprintf("Cluster size:    %v\n", 1<<s.LogClusterSize)
+	rv += fmt.Sprintf("Block size:      %v B\n", s.blockSize())
+	rv += fmt.Sprintf("Cluster size:    %v blocks\n", 1<<s.LogClusterSize)
+
+	rv += fmt.Sprintf("Partition size:  %.1f MiB\n", float64(s.blockSize())*float64(s.BlocksCount())/1024/1024)
 
 	rv += fmt.Sprintf("Blocks/group:    %v\n", s.BlocksPerGroup)
 	rv += fmt.Sprintf("Clusters/group:  %v\n", s.ClustersPerGroup)
 	rv += fmt.Sprintf("Inode/group:     %v\n", s.InodesPerGroup)
 
-	rv += fmt.Sprintf("Magic:           %v\n", s.Magic)
+	rv += fmt.Sprintf("Magic:           %x\n", s.Magic)
 	rv += fmt.Sprintf("State:           %v\n", s.State)
 
 	rv += fmt.Sprintf("FeatureCompat:   %v\n", s.FeatureCompat)
