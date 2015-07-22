@@ -30,13 +30,12 @@ type Directory struct {
 }
 
 func (d Directory) Entries() ([]DirEntry, error) {
-	var entries []DirEntry
 	b, err := d.r.GetInodeContent(d.inode)
 	if err != nil {
-		return entries, err
+		return nil, err
 	}
 
-	entries = make([]DirEntry, 0, d.r.super.blockSize()/12) // min dir_entry2 rec_len seems to be 12
+	entries := make([]DirEntry, 0, d.r.super.blockSize()/12) // min dir_entry2 rec_len seems to be 12
 	r := bytes.NewReader(b)
 	for {
 		de, err := readDirEntry(r)
