@@ -120,7 +120,7 @@ func main() {
 					continue
 				}
 
-				outFile := ouputPath + "/" + orig.Fullname()
+				outFile := ouputPath + fmt.Sprintf("/%d/", partitionNum) + fixFilename(orig.Fullname())
 				if err := os.MkdirAll(path.Dir(outFile), 0777); err != nil {
 					fmt.Printf("ERR: could not create path %s: %s", path.Dir(outFile), err)
 					return
