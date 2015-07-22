@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/MSOpenTech/azure-sdk-for-go/storage"
+	"github.com/Azure/azure-sdk-for-go/storage"
 	"io/ioutil"
 	"os"
 	"path"
