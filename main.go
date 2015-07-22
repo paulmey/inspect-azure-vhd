@@ -2,16 +2,14 @@ package main
 
 import (
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
 
-	"github.com/paulmey/inspect-azure-vhd/ext4"
-
-	"encoding/binary"
 	"flag"
 	"fmt"
-	"io"
+	"github.com/paulmey/inspect-azure-vhd/ext4"
 	"net/http"
 )
 
@@ -43,103 +41,98 @@ func main() {
 
 	fmt.Printf("Reading partition table...\n")
 	// location of MBR partition table http://en.wikipedia.org/wiki/Master_boot_record#Sector_layout
-	s.Seek(446, 0)
-	var p partitionEntry
-	err := binary.Read(s, binary.LittleEndian, &p)
+	partitions, err := readPartitionTable(s)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("Inspecting ext4 filesystem on first partition...\n")
-	// assume that partition 0 is linux with ext4
-	if p.Type != 0x83 {
-		err = fmt.Errorf("Not a linux partition!")
-		return
-	}
+	for partitionNum, p := range partitions {
+		fmt.Printf("Inspecting filesystem on partition %d...\n", partitionNum)
+		// assume that partition 0 is linux with ext4
+		if p.Type != 0x83 {
+			fmt.Printf("Not a linux partition (%d), skipping!\n", p.Type)
+			continue
+		}
 
-	r, err := ext4.NewReader(s, p.LBAfirst, p.Sectors)
-	if err != nil {
-		panic(err)
-	}
-
-	globs := []string{
-		"/etc/ssh*/*",
-		"/etc/ssh*",
-		"/etc/fstab",
-		"/etc/mtab",
-		"/etc/waagent.conf",
-		"/var/log/messages",
-		"/var/log/boot.log",
-		"/var/log/dmesg",
-		"/var/log/syslog",
-		"/var/log/waagent/*",
-		"/var/log/waagent*",
-		"/var/log/walinuxagent/*",
-		"/var/log/walinuxagent*",
-		"/var/log/azure/*",
-		"/var/log/azure/*/*",
-		"/var/log/*",
-	}
-
-	fs, err := r.Root()
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("Downloading interesting files...\n")
-	for _, glob := range globs {
-		files, err := fs.Match(glob)
+		r, err := ext4.NewReader(s, p.LBAfirst, p.Sectors)
+		if err == ext4.ErrNotExt4 {
+			fmt.Printf("Filesystem is not ext4 compatible, skipping!\n")
+			continue
+		}
 		if err != nil {
 			panic(err)
 		}
-		for _, f := range files {
-			orig := f
-			for f.FileType == ext4.FileTypeSymlink {
-				f, err = f.ResolveSymlink()
-				if err != nil {
-					fmt.Printf("WARN: failed to resolve symlink %s: %v\n", orig.Fullname(), err)
+
+		globs := []string{
+			"/etc/ssh*/*",
+			"/etc/ssh*",
+			"/etc/fstab",
+			"/etc/mtab",
+			"/etc/waagent.conf",
+			"/var/log/messages",
+			"/var/log/boot.log",
+			"/var/log/dmesg",
+			"/var/log/syslog",
+			"/var/log/waagent/*",
+			"/var/log/waagent*",
+			"/var/log/walinuxagent/*",
+			"/var/log/walinuxagent*",
+			"/var/log/azure/*",
+			"/var/log/azure/*/*",
+			"/var/log/*",
+		}
+
+		fs, err := r.Root()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Downloading interesting files...\n")
+		for _, glob := range globs {
+			files, err := fs.Match(glob)
+			if err != nil {
+				panic(err)
+			}
+			for _, f := range files {
+				orig := f
+				for f.FileType == ext4.FileTypeSymlink {
+					f, err = f.ResolveSymlink()
+					if err != nil {
+						fmt.Printf("WARN: failed to resolve symlink %s: %v\n", orig.Fullname(), err)
+						continue
+					}
+				}
+				if f.FileType != ext4.FileTypeFile {
 					continue
 				}
-			}
-			if f.FileType != ext4.FileTypeFile {
-				continue
-			}
-			inode, err := r.GetInode(f.Inode)
-			if err != nil {
-				fmt.Printf("WARN: could not read inode %d (%s -> %s): %v\n", f.Inode, orig.Fullname(), f.Fullname(), err)
-				continue
-			}
+				inode, err := r.GetInode(f.Inode)
+				if err != nil {
+					fmt.Printf("WARN: could not read inode %d (%s -> %s): %v\n", f.Inode, orig.Fullname(), f.Fullname(), err)
+					continue
+				}
 
-			fmt.Printf("   %s (%s) \n", orig.Fullname(), orig.FileType)
-			fmt.Printf("     \\-> downloading %d bytes\n", inode.Size())
+				fmt.Printf("   %s (%s) \n", orig.Fullname(), orig.FileType)
+				fmt.Printf("     \\-> downloading %d bytes\n", inode.Size())
 
-			data, err := r.GetInodeContent(inode)
-			if err != nil {
-				fmt.Printf("WARN: could not read data for %s: %s", orig.Fullname(), err)
-				continue
-			}
+				data, err := r.GetInodeContent(inode)
+				if err != nil {
+					fmt.Printf("WARN: could not read data for %s: %s", orig.Fullname(), err)
+					continue
+				}
 
-			outFile := ouputPath + "/" + orig.Fullname()
-			if err := os.MkdirAll(path.Dir(outFile), 0777); err != nil {
-				fmt.Printf("ERR: could not create path %s: %s", path.Dir(outFile), err)
-				return
-			}
-			err = ioutil.WriteFile(outFile, data, 0666)
-			if err != nil {
-				fmt.Printf("ERR: could not write file %s: %s", path.Dir(outFile), err)
-				return
+				outFile := ouputPath + "/" + orig.Fullname()
+				if err := os.MkdirAll(path.Dir(outFile), 0777); err != nil {
+					fmt.Printf("ERR: could not create path %s: %s", path.Dir(outFile), err)
+					return
+				}
+				err = ioutil.WriteFile(outFile, data, 0666)
+				if err != nil {
+					fmt.Printf("ERR: could not write file %s: %s", path.Dir(outFile), err)
+					return
+				}
 			}
 		}
 	}
-}
-
-type partitionEntry struct {
-	Active   byte
-	CHSFirst [3]byte
-	Type     byte
-	CHSLast  [3]byte
-	LBAfirst uint32
-	Sectors  uint32
 }
 
 func SasPageBlobAccessor(url string) io.ReadSeeker {
