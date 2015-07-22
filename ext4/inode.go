@@ -179,7 +179,7 @@ type Inode struct {
 	//0x8000	S_IFREG (Regular file)
 	//0xA000	S_IFLNK (Symbolic link)
 	//0xC000	S_IFSOCK (Socket)
-	Mode       uint16
+	Mode       InodeMode
 	Uid        uint16     // Lower 16-bits of Owner UID.
 	SizeLo     uint32     // Lower 32-bits of size in bytes.
 	Atime      uint32     // Last access time, in seconds since the epoch.
@@ -307,6 +307,95 @@ func (f InodeFlags) String() string {
 		flags = flags[:len(flags)-1]
 	}
 	return fmt.Sprintf("%s(0x%08x)", flags, uint32(f))
+}
+
+type InodeMode uint16
+
+func (m InodeMode) String() string {
+	rv := ""
+	switch m & 0xF000 {
+	case 0x1000:
+		rv += "p" // (FIFO)
+	case 0x2000:
+		rv += "c" // (Character device)
+	case 0x4000:
+		rv += "d" // (Directory)
+	case 0x6000:
+		rv += "b" // (Block device)
+	case 0x8000:
+		rv += "-" // (Regular file)
+	case 0xA000:
+		rv += "l" // (Symbolic link)
+	case 0xC000:
+		rv += "s" // (Socket)
+	default:
+		rv += "?" // (error)
+	}
+
+	if m&0x100 > 0 {
+		rv += "r" // (Owner may read)
+	} else {
+		rv += "-"
+	}
+	if m&0x80 > 0 {
+		rv += "w" // (Owner may write)
+	} else {
+		rv += "-"
+	}
+	switch m & 0x840 {
+	case 0x40:
+		rv += "x" // (Owner may execute)
+	case 0x840:
+		rv += "s" // (Set UID)
+	case 0x800:
+		rv += "S" // (Set UID but not execute)
+	default:
+		rv += "-"
+	}
+
+	if m&0x20 > 0 {
+		rv += "r" // (Group members may read)
+	} else {
+		rv += "-"
+	}
+	if m&0x10 > 0 {
+		rv += "w" // (Group members may write)
+	} else {
+		rv += "-"
+	}
+	switch m & 0x408 {
+	case 0x8:
+		rv += "x" // (Group may execute)
+	case 0x408:
+		rv += "s" // (Set GID)
+	case 0x400:
+		rv += "S" // (Set GID but not execute)
+	default:
+		rv += "-"
+	}
+
+	if m&0x4 > 0 {
+		rv += "r" // (Others may read)
+	} else {
+		rv += "-"
+	}
+	if m&0x2 > 0 {
+		rv += "w" // (Others may write)
+	} else {
+		rv += "-"
+	}
+	switch m & 0x201 {
+	case 0x1:
+		rv += "x" // (Others may execute)
+	case 0x201:
+		rv += "t" // (Sticky)
+	case 0x200:
+		rv += "T" // (Sticky but not execute)
+	default:
+		rv += "-"
+	}
+
+	return fmt.Sprintf("%s(0x%04x)", rv, uint16(m))
 }
 
 func (inode Inode) Size() uint64 {
