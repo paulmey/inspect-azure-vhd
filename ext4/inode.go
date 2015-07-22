@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/Sirupsen/logrus"
 	"io"
 )
 
@@ -26,17 +27,115 @@ func (er *Reader) GetInode(n uint32) (inode Inode, err error) {
 	return
 }
 
+var log = logrus.New()
+
 func (er *Reader) GetInodeReader(inode Inode) (io.Reader, error) {
 	indr := inodeDataReader{
 		er:     er,
 		length: int64(inode.Size()),
 	}
-	extents, err := er.GetExtents(inode)
+	if inode.Flags&InodeFlagExtents > 0 {
+		extents, err := er.GetExtents(inode)
+		if err != nil {
+			return nil, err
+		}
+		indr.extents = extents
+		return &indr, nil
+	} else {
+		log.Infoln("Trying to read block map")
+
+		blocks, err := er.readBlockMap(inode)
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("  block pointers: %+v", blocks)
+		for i, p := range blocks {
+			indr.extents = append(indr.extents, Extent{
+				Block:   uint32(i),
+				Len:     1,
+				StartLo: p,
+				StartHi: 0,
+			})
+		}
+		return &indr, nil
+	}
+}
+
+func (er *Reader) readBlockMap(inode Inode) ([]uint32, error) {
+	// the inode block map is layed out as 12 direct pointers to
+	// blocks, followed by three indirect pointers with increasing
+	// levels of indirection. The first 0-pointer encountered walking
+	// the structure indicates the end of the pointer array.
+	// See https://en.wikipedia.org/wiki/Inode_pointer_structure
+
+	nodeData := inode.GetDataReader()
+	blocks := make([]uint32, 12)
+	err := binary.Read(nodeData, binary.LittleEndian, &blocks)
 	if err != nil {
 		return nil, err
 	}
-	indr.extents = extents
-	return &indr, nil
+	log.Infof("  direct block pointers: %+v", blocks)
+	for i, b := range blocks {
+		if b == 0 {
+			return blocks[:i], nil
+		}
+	}
+
+	// if no 0-pointer encountered, then dig into indirect pointers
+	pointers := make([]uint32, 3)
+	if err := binary.Read(nodeData, binary.LittleEndian, &pointers); err != nil {
+		return nil, err
+	}
+	for i, p := range pointers {
+		if p == 0 {
+			break
+		}
+		indirectblocks, err, done := er.readIndirectBlockMap(p, i+1)
+		if err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, indirectblocks...)
+		if done {
+			break
+		}
+	}
+
+	for i, b := range blocks {
+		if b == 0 {
+			return blocks[:i], nil
+		}
+	}
+	return blocks, nil
+}
+
+func (er *Reader) readIndirectBlockMap(pointer uint32, level int) ([]uint32, error, bool) {
+	if level == 0 {
+		if pointer == 0 {
+			return []uint32{}, nil, true
+		}
+		return []uint32{pointer}, nil, false
+	}
+	log.Infof("  reading one block of indirect block pointers with indirection level %d", level)
+	pointers := make([]uint32, er.super.blockSize())
+	if _, err := er.s.Seek(er.blockOffset(int64(pointer)), 0); err != nil {
+		return nil, err, false
+	}
+	if err := binary.Read(er.s, binary.LittleEndian, &pointers); err != nil {
+		return nil, err, false
+	}
+	var blocks []uint32
+	for i, p := range pointers {
+		indirectblocks, err, done := er.readIndirectBlockMap(p, level-1)
+		if err != nil {
+			return nil, err, false
+		}
+		blocks = append(blocks, indirectblocks...)
+		if done {
+			log.Infof("  end of block map found after following %d pointers at level %d", i, level)
+			return blocks, nil, done
+		}
+	}
+	return blocks, nil, false
 }
 
 func (er *Reader) GetInodeContent(inode Inode) ([]byte, error) {
