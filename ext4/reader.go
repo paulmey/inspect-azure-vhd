@@ -6,6 +6,8 @@ import (
 	"io"
 )
 
+var ErrNotExt4 = fmt.Errorf("This does not seem to be an ext2/3/4 partition!")
+
 func NewReader(s io.ReadSeeker, startBlock, blockCount uint32) (r Reader, err error) {
 	r = Reader{
 		s:     s,
@@ -23,7 +25,7 @@ func NewReader(s io.ReadSeeker, startBlock, blockCount uint32) (r Reader, err er
 	}
 
 	if r.super.Magic != 0xEF53 {
-		err = fmt.Errorf("This does not seem to be an ext2/3/4 partition!")
+		err = ErrNotExt4
 		return
 	}
 
@@ -44,7 +46,7 @@ func NewReader(s io.ReadSeeker, startBlock, blockCount uint32) (r Reader, err er
 		r.super.BlocksCountHi = 0
 	}
 
-	fmt.Printf(r.super.String())
+	fmt.Printf("%+v\n", r.super)
 
 	return
 }
