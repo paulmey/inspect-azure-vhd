@@ -67,6 +67,7 @@ func main() {
 			"/etc/ssh*/*",
 			"/etc/ssh*",
 			"/etc/fstab",
+			"/etc/passwd",
 			"/etc/mtab",
 			"/etc/waagent.conf",
 			"/var/log/messages*",
