@@ -1,12 +1,16 @@
 sudo: false
 
 language: go
+
 go:
-  - 1.10
+  - 1.x
+
 env:
   - "PATH=/home/travis/gopath/bin:$PATH"
+
 script:
   - go test -v ./...
+
 after_success: |
   if [ $TRAVIS_BRANCH == 'master' ]; then
     go get github.com/mitchellh/gox
